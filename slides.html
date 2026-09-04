@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Signal Pro · JLST 多信号动量策略</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/black.min.css">
+<style>
+  :root {
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --fg2: #8b949e;
+    --fg3: #484f58;
+    --accent: #58a6ff;
+    --card-bg: #161b22;
+    --border: #30363d;
+  }
+  .reveal { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: var(--fg); }
+  .reveal .slides { text-align: left; }
+  .reveal h1, .reveal h2, .reveal h3 { color: var(--fg); font-weight: 700; text-align: left; }
+  .reveal h1 { font-size: 2.2em; }
+  .reveal h2 { font-size: 1.6em; border-bottom: 3px solid var(--accent); padding-bottom: 8px; margin-bottom: 24px; }
+  .reveal h3 { font-size: 1.15em; color: var(--fg2); }
+  .reveal p, .reveal li { font-size: 0.75em; line-height: 1.7; color: var(--fg); }
+  .reveal ul { margin-left: 0; padding-left: 1.2em; }
+  .reveal li { margin-bottom: 0.4em; }
+  .reveal .slides section { padding: 40px 60px; }
+  .reveal code { background: var(--card-bg); padding: 2px 8px; border-radius: 4px; font-size: 0.85em; color: var(--orange); }
+  .reveal .small { font-size: 0.6em; color: var(--fg2); }
+  .reveal .tag { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.65em; font-weight: 600; margin: 2px; }
+  .tag-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .tag-red { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+  .tag-blue { background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+  .tag-orange { background: rgba(210,153,34,0.15); color: var(--orange); border: 1px solid rgba(210,153,34,0.3); }
+  .tag-purple { background: rgba(188,140,255,0.15); color: var(--purple); border: 1px solid rgba(188,140,255,0.3); }
+
+  /* Cover */
+  .cover h1 { font-size: 2.6em; text-align: center; margin-bottom: 0; }
+  .cover .subtitle { text-align: center; font-size: 1em; color: var(--fg2); margin-top: 8px; }
+  .cover .meta { text-align: center; font-size: 0.7em; color: var(--fg2); margin-top: 32px; }
+
+  /* Boxes */
+  .highlight-box { background: var(--card-bg); border-left: 4px solid var(--accent); padding: 16px 20px; border-radius: 8px; margin: 16px 0; }
+  .highlight-box.green { border-left-color: var(--green); }
+  .highlight-box.red { border-left-color: var(--red); }
+  .highlight-box.orange { border-left-color: var(--orange); }
+  .highlight-box.purple { border-left-color: var(--purple); }
+
+  /* Formula */
+  .formula { background: var(--card-bg); padding: 20px 24px; border-radius: 10px; text-align: center; font-size: 1.1em; margin: 20px 0; font-family: 'Cambria Math', Georgia, serif; color: var(--blue); letter-spacing: 0.5px; }
+
+  /* Tables */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.65em; margin: 12px 0; }
+  .data-table th { background: var(--card-bg); color: var(--fg2); padding: 10px 12px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--border); }
+  .data-table td { padding: 8px 12px; text-align: center; border-bottom: 1px solid #21262d; }
+  .data-table tr:hover { background: rgba(88,166,255,0.05); }
+
+  /* Two column */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+  .two-col > div { min-width: 0; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; align-items: start; }
+
+  /* Metric cards */
+  .metric-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+  .metric { background: var(--card-bg); border-radius: 10px; padding: 16px 20px; flex: 1; min-width: 120px; text-align: center; }
+  .metric .num { font-size: 1.8em; font-weight: 800; margin: 4px 0; }
+  .metric .label { font-size: 0.65em; color: var(--fg2); }
+
+  /* Emoji list */
+  .emoji-list { list-style: none; padding-left: 0; }
+  .emoji-list li { padding-left: 0; margin-bottom: 0.6em; }
+
+  /* VS card */
+  .vs-card { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin: 16px 0; }
+  .vs-card .vs { font-size: 1.4em; color: var(--fg2); font-weight: 800; text-align: center; }
+
+  /* Progress bars */
+  .bar-wrap { margin: 6px 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 0.6em; margin-bottom: 4px; }
+  .bar { height: 8px; border-radius: 4px; background: #21262d; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+
+  /* Section divider */
+  .section-divider { text-align: center; }
+  .section-divider h2 { text-align: center; border: none; font-size: 2em; }
+  .section-divider .num { font-size: 4em; font-weight: 900; color: var(--accent); opacity: 0.3; line-height: 1; }
+
+  /* Footer */
+  .slide-footer { position: absolute; bottom: 16px; left: 60px; right: 60px; font-size: 0.5em; color: var(--fg2); display: flex; justify-content: space-between; }
+
+  /* Step flow */
+  .step-flow { display: flex; align-items: center; gap: 8px; margin: 16px 0; flex-wrap: wrap; }
+  .step-box { background: var(--card-bg); border-radius: 8px; padding: 12px 16px; text-align: center; font-size: 0.7em; flex: 1; min-width: 100px; }
+  .step-arrow { font-size: 1.2em; color: var(--fg2); flex-shrink: 0; }
+
+  /* Comparison highlight */
+  .compare-up { color: var(--green); font-weight: 700; }
+  .compare-down { color: var(--red); font-weight: 700; }
+  .compare-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.7em; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,0.2); color: var(--green); }
+  .badge-red { background: rgba(248,81,73,0.2); color: var(--red); }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================ -->
+<!-- SLIDE 1: Cover -->
+<!-- ============================================ -->
+<section>
+  <div class="cover">
+    <div style="margin-bottom:40px">
+      <span class="tag tag-blue">📊 量化指标</span>
+      <span class="tag tag-green">🔬 学术论文驱动</span>
+      <span class="tag tag-orange">₿ BTC 适配</span>
+      <span class="tag tag-purple">🎯 多信号策略</span>
+    </div>
+    <h1>BTC Signal Pro</h1>
+    <div class="subtitle">JLST 反转-动量多信号策略系统</div>
+    <div class="meta">
+      基于 Jegadeesh, Luo, Subrahmanyam &amp; Titman (2025)<br>
+      <em>Review of Financial Studies</em> — 全球顶级金融学术期刊<br><br>
+      <span style="color:var(--fg2)">仪表盘：<a href="https://hhysteric.github.io/btc-signal-pro/" style="color:var(--accent)" target="_blank">hhysteric.github.io/btc-signal-pro</a></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SLIDE 2: The Problem -->
+<!-- ============================================ -->
+<section>
+  <h2>💭 你可能遇到过这些问题</h2>
+  <ul class="emoji-list" style="font-size:0.85em">
+    <li class="fragment">📉 BTC 跌了 10%，朋友说"抄底"，你不确定——<strong style="color:var(--green)">还会反弹吗？</strong></li>
+    <li class="fragment">📈 BTC 涨了一个月，你想追——<strong style="color:var(--red)">趋势还能持续吗？</strong></li>
+    <li class="fragment">😵 看了一堆指标（RSI、MACD、布林带），信号互相矛盾</li>
+    <li class="fragment">🤔 想要一个<strong style="color:var(--accent)">有学术论文支撑</strong>的、而不是靠"画线"的分析工具</li>
+    <li class="fragment">🎯 找到了好信号，但不知道如何<strong style="color:var(--orange)">叠加多重确认</strong>来提高胜率</li>
+  </ul>
+  <div class="fragment highlight-box" style="margin-top:20px">
+    <strong>BTC Signal Pro 的价值：</strong>JLST 理论信号 + MA 均线多重过滤 → 用学术框架确定方向，用趋势滤波提高精度。
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SLIDE 3: Paper Origin -->
+<!-- ============================================ -->
+<section>
+  <h2>📚 论文出处</h2>
+  <div class="highlight-box" style="font-size:0.8em">
+    <strong>N. Jegadeesh, J. Luo, A. Subrahmanyam, S. Titman</strong> (2025)<br>
+    <em>"Short-Term Reversals and Longer-Term Momentum around the World"</em><br>
+    <strong>Review of Financial Studies (RFS)</strong> — 金融学三大顶刊之一
+  </div>
+  <div class="two-col fragment" style="margin-top:24px">
+    <div>
+      <h3>论文做了什么？</h3>
+      <ul>
+        <li>研究了 <strong>39 个国家</strong>股票市场</li>
+        <li>用同一个模型解释"短期反转"和"中长期动量"如何<strong>同时存在</strong></li>
+        <li>发现<strong>噪声交易</strong>是两者联系的关键纽带</li>
+      </ul>
+    </div>
+    <div>
+      <h3>我们做了什么？</h3>
+      <ul>
+        <li>将论文的理论应用到 <strong>BTC 市场</strong></li>
+        <li>构建了一个实时仪表盘，每日更新</li>
+        <li>叠加 <strong>MA 多信号过滤</strong>，将理论收益提升为实操策略</li>
+        <li>开放可配置滤波条件，用户自行调优</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SECTION 01: Core Concepts -->
+<!-- ============================================ -->
+<section class="section-divider">
+  <div class="num">01</div>
+  <h2>核心概念</h2>
+  <h3 style="text-align:center">短期反转 &amp; 中长期动量</h3>
+</section>
+
+<!-- SLIDE: Reversal -->
+<section>
+  <h2>🔄 什么是短期反转？</h2>
+  <div class="two-col">
+    <div>
+      <div class="highlight-box red">
+        <strong>一句话：</strong>过去 1 个月跌多了的资产，未来容易<span style="color:var(--green)">反弹</span>
+      </div>
+      <ul class="fragment">
+        <li><strong>原因：噪声交易者</strong>（散户、杠杆投机者）让价格暂时偏离基本面</li>
+        <li>做市商承接这些"噪声订单"需要补偿 → 价格<strong>过度反应</strong></li>
+        <li>过度反应之后 → 价格<strong>回归均值</strong></li>
+      </ul>
+      <div class="fragment small" style="margin-top:12px">
+        论文证据：表2 显示 ρ₁ &lt; 0（过去1个月收益与未来收益负相关）
+      </div>
+    </div>
+    <div class="fragment">
+      <div style="background:var(--card-bg);border-radius:10px;padding:20px;text-align:center">
+        <div style="font-size:3em;margin-bottom:8px">📉 → 📈</div>
+        <div style="font-size:0.7em;color:var(--fg2)">短期跌多了 → 反弹</div>
+        <div style="margin-top:16px;font-size:0.65em;color:var(--orange)">
+          BTC 散户参与度高 + 杠杆放大<br>→ 反转效应比股票<strong>更强</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: Momentum -->
+<section>
+  <h2>🚀 什么是中长期动量？</h2>
+  <div class="two-col">
+    <div>
+      <div class="highlight-box green">
+        <strong>一句话：</strong>过去 3-12 个月涨的资产，未来可能<span style="color:var(--green)">继续涨</span>
+      </div>
+      <ul class="fragment">
+        <li><strong>原因：信息反应不足</strong> — 投资者对非自己产生的信息不够重视</li>
+        <li>新信息（如 ETF 获批、减半周期）→ 价格<strong>逐步消化</strong>，而不是一步到位</li>
+        <li>这个"消化过程"就形成了<strong>趋势延续</strong></li>
+      </ul>
+      <div class="fragment small" style="margin-top:12px">
+        论文证据：表2 显示 ρ₃…ρ₁₂ &gt; 0（滞后3-12月收益与未来收益正相关）
+      </div>
+    </div>
+    <div class="fragment">
+      <div style="background:var(--card-bg);border-radius:10px;padding:20px;text-align:center">
+        <div style="font-size:3em;margin-bottom:8px">📈 → 📈📈</div>
+        <div style="font-size:0.7em;color:var(--fg2)">中长期涨 → 继续涨</div>
+        <div style="margin-top:16px;font-size:0.65em;color:var(--blue)">
+          关键技巧："跳过"最近 1 个月<br>
+          消除反转干扰 → 动量更纯粹
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: Coexistence -->
+<section>
+  <h2>🤝 反转 vs 动量 — 如何共存？</h2>
+  <p style="color:var(--fg2);font-size:0.75em">看似矛盾：一个说"跌了要涨"，一个说"涨了还涨"？</p>
+  <div class="two-col fragment" style="margin-top:16px">
+    <div class="highlight-box red" style="text-align:center">
+      <div style="font-size:1.5em;margin-bottom:4px">🔄 短期反转</div>
+      <div style="font-size:0.7em">时间窗口：<strong>1 个月</strong></div>
+      <div style="font-size:0.7em">驱动因子：<strong>噪声交易</strong>（散户投机）</div>
+      <div style="font-size:0.7em">逻辑：价格偏离 → 回归</div>
+    </div>
+    <div class="highlight-box green" style="text-align:center">
+      <div style="font-size:1.5em;margin-bottom:4px">🚀 中长期动量</div>
+      <div style="font-size:0.7em">时间窗口：<strong>3-12 个月</strong></div>
+      <div style="font-size:0.7em">驱动因子：<strong>信息反应不足</strong></div>
+      <div style="font-size:0.7em">逻辑：信息消化 → 趋势延续</div>
+    </div>
+  </div>
+  <div class="fragment highlight-box" style="margin-top:20px">
+    <strong>💡 JLST 的核心洞察：</strong>两者不矛盾！它们的<strong>驱动因子不同</strong>、<strong>时间尺度不同</strong>。
+    噪声交易越多 → 反转越强 + 动量越弱。这个跷跷板关系在 39 个国家都成立。
+  </div>
+</section>
+
+<!-- SLIDE: Noise Traders -->
+<section>
+  <h2>📢 噪声交易者 = 关键变量</h2>
+  <div class="highlight-box orange">
+    <strong>论文核心发现（命题1）：</strong>噪声交易规模 ↑ → 反转增强 &amp; 动量减弱
+  </div>
+  <div class="two-col fragment" style="margin-top:20px">
+    <div>
+      <h3>什么是噪声交易者？</h3>
+      <ul>
+        <li>不基于基本面分析、而是跟风/情绪驱动的交易者</li>
+        <li>散户 FOMO 追涨、恐慌杀跌</li>
+        <li>高杠杆投机者</li>
+        <li>他们让市场<strong>短期过度反应</strong></li>
+      </ul>
+    </div>
+    <div>
+      <h3>BTC vs 股票</h3>
+      <table class="data-table">
+        <tr><th></th><th>股票</th><th>BTC</th></tr>
+        <tr><td>散户占比</td><td>约 20%</td><td style="color:var(--orange)"><strong>&gt;60%</strong></td></tr>
+        <tr><td>最大杠杆</td><td>2-4x</td><td style="color:var(--orange)"><strong>125x</strong></td></tr>
+        <tr><td>交易时间</td><td>6.5h/天</td><td style="color:var(--orange)"><strong>24/7</strong></td></tr>
+        <tr><td>预期反转强度</td><td>一般</td><td style="color:var(--green)"><strong>更强</strong></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: Formula -->
+<section>
+  <h2>📐 公式一图流</h2>
+  <div style="font-size:0.75em;color:var(--fg2);margin-bottom:12px">不需要记住公式 — 仪表盘会自动计算。这里只是帮助理解原理。</div>
+
+  <div class="fragment">
+    <div style="font-size:0.7em;color:var(--fg2);margin-bottom:4px">① 反转因子（最近1个月收益的"反向"）</div>
+    <div class="formula">Rev<sub>t</sub> = −r<sub>t−1</sub></div>
+  </div>
+  <div class="fragment">
+    <div style="font-size:0.7em;color:var(--fg2);margin-bottom:4px">② 动量因子（跳过最近1个月后的累积收益）</div>
+    <div class="formula">Mom<sub>t</sub> = Σ r<sub>t−k</sub> , k = 2…12</div>
+  </div>
+  <div class="fragment">
+    <div style="font-size:0.7em;color:var(--fg2);margin-bottom:4px">③ 综合评分（标准化后加权）</div>
+    <div class="formula">Composite = w<sub>1</sub> · z(Rev) + w<sub>2</sub> · z(Mom) + w<sub>3</sub> · z(FundingRate)</div>
+  </div>
+  <div class="fragment small" style="margin-top:12px">
+    v2 版本额外引入了<strong>资金费率</strong>（反映多空杠杆情绪）、<strong>波动率分档</strong>和<strong>减半周期</strong>等 BTC 适配因子。
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SECTION 02: Signal System -->
+<!-- ============================================ -->
+<section class="section-divider">
+  <div class="num">02</div>
+  <h2>信号系统</h2>
+  <h3 style="text-align:center">JLST 评分 → 买卖信号 → 多信号滤波</h3>
+</section>
+
+<!-- SLIDE: Signal Rules -->
+<section>
+  <h2>📡 信号产生规则</h2>
+  <div class="two-col">
+    <div>
+      <div class="highlight-box green">
+        <div style="font-size:1.2em;margin-bottom:8px">▲ 做多信号</div>
+        <ul style="font-size:0.85em;list-style:none;padding:0">
+          <li>✅ 综合评分 &gt; <code>+0.5</code></li>
+          <li>✅ 前一天评分 ≤ +0.5（突破阈值）</li>
+        </ul>
+        <div style="margin-top:8px;font-size:0.7em;color:var(--fg2)">含义：反转+动量双双看涨，趋势刚确认</div>
+      </div>
+    </div>
+    <div>
+      <div class="highlight-box red">
+        <div style="font-size:1.2em;margin-bottom:8px">▼ 做空信号</div>
+        <ul style="font-size:0.85em;list-style:none;padding:0">
+          <li>✅ 综合评分 &lt; <code>−0.5</code></li>
+          <li>✅ 前一天评分 ≥ −0.5（跌破阈值）</li>
+        </ul>
+        <div style="margin-top:8px;font-size:0.7em;color:var(--fg2)">含义：反转+动量双双看跌，趋势刚确认</div>
+      </div>
+    </div>
+  </div>
+  <div class="fragment" style="margin-top:20px">
+    <div class="metric-row">
+      <div class="metric">
+        <div class="num" style="color:var(--blue)">194</div>
+        <div class="label">历史信号总数（2011–2026）</div>
+      </div>
+      <div class="metric">
+        <div class="num" style="color:var(--green)">87</div>
+        <div class="label">做多信号</div>
+      </div>
+      <div class="metric">
+        <div class="num" style="color:var(--red)">107</div>
+        <div class="label">做空信号</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: Forward Returns (JLST Only) -->
+<section>
+  <h2>📊 JLST 信号前瞻回报（无 MA 滤波）</h2>
+  <p style="font-size:0.7em;color:var(--fg2)">信号触发后，次日开盘买入（或做空），持有 N 天的平均收益率</p>
+
+  <table class="data-table" style="margin-top:16px">
+    <thead>
+      <tr><th>持有期</th><th>全部信号</th><th style="color:var(--green)">▲ 做多</th><th style="color:var(--red)">▼ 做空</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1 天</strong></td>
+        <td>+0.58% <span class="small">(55.7%)</span></td>
+        <td style="color:var(--green)">+0.66% <span class="small">(56.3%)</span></td>
+        <td style="color:var(--red)">+0.52% <span class="small">(55.1%)</span></td>
+      </tr>
+      <tr>
+        <td><strong>3 天</strong></td>
+        <td>+1.12% <span class="small">(56.0%)</span></td>
+        <td style="color:var(--green)">+1.63% <span class="small">(60.9%)</span></td>
+        <td style="color:var(--red)">+0.71% <span class="small">(51.9%)</span></td>
+      </tr>
+      <tr>
+        <td><strong>7 天</strong></td>
+        <td>+1.81% <span class="small">(53.9%)</span></td>
+        <td style="color:var(--green)">+2.82% <span class="small">(57.5%)</span></td>
+        <td style="color:var(--red)">+0.98% <span class="small">(50.9%)</span></td>
+      </tr>
+      <tr>
+        <td><strong>30 天</strong></td>
+        <td>+2.79% <span class="small">(48.4%)</span></td>
+        <td style="color:var(--green)">+9.76% <span class="small">(55.2%)</span></td>
+        <td style="color:var(--red)">−2.99% <span class="small">(42.9%)</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="fragment small" style="margin-top:12px">
+    括号内为胜率。做多 30 天 +9.76% 非常亮眼 — 但<strong>能否进一步提升？</strong>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SECTION 03: Multi-Signal Strategy -->
+<!-- ============================================ -->
+<section class="section-divider">
+  <div class="num">03</div>
+  <h2>多信号策略</h2>
+  <h3 style="text-align:center">JLST + MA 均线 = 超额收益的关键</h3>
+</section>
+
+<!-- SLIDE: Multi-Signal Logic -->
+<section>
+  <h2>🎯 多信号滤波逻辑</h2>
+  <p style="font-size:0.75em;color:var(--fg2)">核心思路：JLST 提供方向信号，MA 均线确认趋势环境。只有在趋势友好时才执行信号。</p>
+
+  <div class="two-col" style="margin-top:16px">
+    <div class="fragment">
+      <div class="highlight-box green">
+        <div style="font-size:1.1em;margin-bottom:8px"><strong>▲ 做多滤波条件</strong></div>
+        <ul style="font-size:0.8em;list-style:none;padding:0;margin:0">
+          <li>☑️ <strong>价格 &gt; MA110</strong> — 长期趋势向上</li>
+          <li>☑️ <strong>MA6 &gt; MA103</strong> — 短均线在长均线之上</li>
+          <li>☑️ <strong>价格 &gt; EMA50</strong> — 中期趋势确认</li>
+        </ul>
+        <div style="margin-top:8px;font-size:0.65em;color:var(--fg2)">三者全部满足 → 当前处于上涨趋势 → 允许做多</div>
+      </div>
+    </div>
+    <div class="fragment">
+      <div class="highlight-box red">
+        <div style="font-size:1.1em;margin-bottom:8px"><strong>▼ 做空滤波条件</strong></div>
+        <ul style="font-size:0.8em;list-style:none;padding:0;margin:0">
+          <li>☑️ <strong>价格 &lt; MA110</strong> — 长期趋势向下</li>
+          <li>☑️ <strong>价格 &lt; EMA50</strong> — 中期趋势确认</li>
+        </ul>
+        <div style="margin-top:8px;font-size:0.65em;color:var(--fg2)">条件满足 → 当前处于下跌趋势 → 允许做空</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fragment step-flow" style="margin-top:20px">
+    <div class="step-box" style="border:1px solid var(--blue)">
+      <div style="font-size:1.5em">📡</div>
+      JLST 信号触发
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step-box" style="border:1px solid var(--orange)">
+      <div style="font-size:1.5em">📏</div>
+      MA 滤波检查
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step-box" style="border:1px solid var(--green)">
+      <div style="font-size:1.5em">✅</div>
+      通过 → 执行
+    </div>
+    <div class="step-arrow" style="color:var(--red)">/ ✗</div>
+    <div class="step-box" style="border:1px solid var(--red);opacity:0.6">
+      <div style="font-size:1.5em">⏸️</div>
+      不满足 → 跳过
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: Why MA Filters Work -->
+<section>
+  <h2>💡 为什么 MA 滤波有效？</h2>
+
+  <div class="highlight-box" style="font-size:0.8em">
+    <strong>核心理由：</strong>JLST 信号侧重于"价格偏离基本面的程度"，但不直接判断趋势方向。
+    在<strong>逆趋势</strong>环境下触发的信号（如下跌趋势中的做多信号）往往是<strong>假突破</strong>。
+  </div>
+
+  <div class="two-col fragment" style="margin-top:20px">
+    <div>
+      <h3 style="color:var(--green)">✅ 好的做多时机</h3>
+      <div style="background:var(--card-bg);border-radius:8px;padding:16px;font-size:0.75em">
+        <div>📈 价格站上 MA110、EMA50</div>
+        <div>📈 MA6 金叉 MA103</div>
+        <div>📡 JLST 做多信号触发</div>
+        <div style="margin-top:8px;color:var(--green);font-weight:600">→ 趋势 + 信号共振 → 高概率盈利</div>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--red)">❌ 差的做多时机</h3>
+      <div style="background:var(--card-bg);border-radius:8px;padding:16px;font-size:0.75em">
+        <div>📉 价格仍在 MA110 之下</div>
+        <div>📉 MA6 在 MA103 之下</div>
+        <div>📡 JLST 做多信号触发</div>
+        <div style="margin-top:8px;color:var(--red);font-weight:600">→ 逆势做多 → 大概率假突破</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fragment small" style="margin-top:16px">
+    数据说明：194 个 JLST 原始信号 → 经 MA 滤波后剩余 <strong>96 个高质量信号</strong>（49.5%），过滤掉了一半噪声。
+  </div>
+</section>
+
+<!-- SLIDE: Configurable Filters -->
+<section>
+  <h2>⚙️ 用户可配置的滤波器</h2>
+  <p style="font-size:0.75em;color:var(--fg2)">BTC Signal Pro 允许你自行选择启用哪些 MA 条件 — 全部勾选最严格，全部取消则显示原始信号。</p>
+
+  <div class="fragment" style="margin-top:16px">
+    <div style="background:var(--card-bg);border-radius:10px;padding:20px;border:1px solid var(--border)">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:0.8em">
+        <strong style="color:var(--green);min-width:90px">▲ 做多滤波：</strong>
+        <span style="background:rgba(63,185,80,0.15);padding:4px 10px;border-radius:6px;border:1px solid rgba(63,185,80,0.3)">☑ 价格 &gt; MA110</span>
+        <span style="background:rgba(63,185,80,0.15);padding:4px 10px;border-radius:6px;border:1px solid rgba(63,185,80,0.3)">☑ MA6 &gt; MA103</span>
+        <span style="background:rgba(63,185,80,0.15);padding:4px 10px;border-radius:6px;border:1px solid rgba(63,185,80,0.3)">☑ 价格 &gt; EMA50</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:0.8em;margin-top:12px">
+        <strong style="color:var(--red);min-width:90px">▼ 做空滤波：</strong>
+        <span style="background:rgba(248,81,73,0.15);padding:4px 10px;border-radius:6px;border:1px solid rgba(248,81,73,0.3)">☑ 价格 &lt; MA110</span>
+        <span style="background:rgba(248,81,73,0.15);padding:4px 10px;border-radius:6px;border:1px solid rgba(248,81,73,0.3)">☑ 价格 &lt; EMA50</span>
+      </div>
+      <div style="margin-top:10px;font-size:0.65em;color:var(--fg2)">勾选 = 要求满足该条件才保留信号；全部取消 = 显示所有 JLST 原始信号</div>
+    </div>
+  </div>
+
+  <div class="fragment" style="margin-top:16px">
+    <div class="metric-row">
+      <div class="metric">
+        <div class="num" style="color:var(--fg2)">194</div>
+        <div class="label">原始信号</div>
+      </div>
+      <div class="metric" style="border:2px solid var(--accent)">
+        <div class="num" style="color:var(--accent)">96</div>
+        <div class="label">全部滤波后</div>
+      </div>
+      <div class="metric">
+        <div class="num" style="color:var(--green)">43</div>
+        <div class="label">做多（通过）</div>
+      </div>
+      <div class="metric">
+        <div class="num" style="color:var(--red)">53</div>
+        <div class="label">做空（通过）</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SECTION 04: Performance -->
+<!-- ============================================ -->
+<section class="section-divider">
+  <div class="num">04</div>
+  <h2>超额收益</h2>
+  <h3 style="text-align:center">多信号 vs 原始信号的表现对比</h3>
+</section>
+
+<!-- SLIDE: Multi vs JLST Comparison -->
+<section>
+  <h2>📈 多信号 vs 原始 JLST（全部信号）</h2>
+  <p style="font-size:0.7em;color:var(--fg2)">平均前瞻收益率对比 — 多信号滤波后的信号质量显著提升</p>
+
+  <table class="data-table" style="margin-top:12px">
+    <thead>
+      <tr><th>持有期</th><th>JLST 原始</th><th>多信号滤波</th><th>超额提升</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1 天</strong></td>
+        <td>+0.58%</td>
+        <td style="color:var(--green);font-weight:700">+0.92%</td>
+        <td><span class="compare-badge badge-green">+59%</span></td>
+      </tr>
+      <tr>
+        <td><strong>3 天</strong></td>
+        <td>+1.12%</td>
+        <td style="color:var(--green);font-weight:700">+1.61%</td>
+        <td><span class="compare-badge badge-green">+44%</span></td>
+      </tr>
+      <tr>
+        <td><strong>7 天</strong></td>
+        <td>+1.81%</td>
+        <td style="color:var(--green);font-weight:700">+2.71%</td>
+        <td><span class="compare-badge badge-green">+50%</span></td>
+      </tr>
+      <tr>
+        <td><strong>30 天</strong></td>
+        <td>+2.79%</td>
+        <td style="color:var(--green);font-weight:700">+8.88%</td>
+        <td><span class="compare-badge badge-green">+218%</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="fragment highlight-box green" style="margin-top:16px">
+    <strong>🎯 核心结论：</strong>多信号滤波将 30 天收益从 +2.79% 提升至 <strong>+8.88%</strong> —
+    超额收益提升了 <strong>218%</strong>。过滤掉逆势信号是获取超额回报的关键。
+  </div>
+</section>
+
+<!-- SLIDE: Long-Only Multi-Signal -->
+<section>
+  <h2>🟢 做多策略 — 最强阿尔法</h2>
+  <p style="font-size:0.7em;color:var(--fg2)">做多信号叠加 MA 滤波后的效果最为显著</p>
+
+  <table class="data-table" style="margin-top:12px">
+    <thead>
+      <tr><th>持有期</th><th>JLST 做多</th><th>多信号做多</th><th>超额</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1 天</strong></td>
+        <td>+0.66% <span class="small">(56.3%)</span></td>
+        <td style="color:var(--green);font-weight:700">+1.57% <span class="small">(60.5%)</span></td>
+        <td><span class="compare-badge badge-green">+138%</span></td>
+      </tr>
+      <tr>
+        <td><strong>3 天</strong></td>
+        <td>+1.63% <span class="small">(60.9%)</span></td>
+        <td style="color:var(--green);font-weight:700">+3.37% <span class="small">(65.1%)</span></td>
+        <td><span class="compare-badge badge-green">+107%</span></td>
+      </tr>
+      <tr>
+        <td><strong>7 天</strong></td>
+        <td>+2.82% <span class="small">(57.5%)</span></td>
+        <td style="color:var(--green);font-weight:700">+5.52% <span class="small">(60.5%)</span></td>
+        <td><span class="compare-badge badge-green">+96%</span></td>
+      </tr>
+      <tr>
+        <td><strong>30 天</strong></td>
+        <td>+9.76% <span class="small">(55.2%)</span></td>
+        <td style="color:var(--green);font-weight:700">+18.82% <span class="small">(58.1%)</span></td>
+        <td><span class="compare-badge badge-green">+93%</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="fragment" style="margin-top:16px">
+    <div class="metric-row">
+      <div class="metric" style="border-top:3px solid var(--green)">
+        <div class="num" style="color:var(--green)">+18.82%</div>
+        <div class="label">多信号做多 30 天平均收益</div>
+      </div>
+      <div class="metric" style="border-top:3px solid var(--green)">
+        <div class="num" style="color:var(--green)">65.1%</div>
+        <div class="label">3 天胜率</div>
+      </div>
+      <div class="metric" style="border-top:3px solid var(--blue)">
+        <div class="num" style="color:var(--blue)">43</div>
+        <div class="label">信号次数（6 年 87 次 → 43 次）</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: Short Signal Performance -->
+<section>
+  <h2>🔴 做空策略 — MA 滤波的效果</h2>
+  <p style="font-size:0.7em;color:var(--fg2)">做空信号经 MA 滤波后，可减少在牛市中逆势做空的损失</p>
+
+  <table class="data-table" style="margin-top:12px">
+    <thead>
+      <tr><th>持有期</th><th>JLST 做空</th><th>多信号做空</th><th>变化</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1 天</strong></td>
+        <td>+0.52% <span class="small">(55.1%)</span></td>
+        <td>+0.40% <span class="small">(52.8%)</span></td>
+        <td><span class="small" style="color:var(--fg2)">−23%</span></td>
+      </tr>
+      <tr>
+        <td><strong>3 天</strong></td>
+        <td>+0.71% <span class="small">(51.9%)</span></td>
+        <td>+0.17% <span class="small">(47.2%)</span></td>
+        <td><span class="small" style="color:var(--fg2)">−76%</span></td>
+      </tr>
+      <tr>
+        <td><strong>7 天</strong></td>
+        <td>+0.98% <span class="small">(50.9%)</span></td>
+        <td>+0.43% <span class="small">(47.2%)</span></td>
+        <td><span class="small" style="color:var(--fg2)">−56%</span></td>
+      </tr>
+      <tr>
+        <td><strong>30 天</strong></td>
+        <td style="color:var(--red)">−2.99% <span class="small">(42.9%)</span></td>
+        <td>+0.82% <span class="small">(45.3%)</span></td>
+        <td><span class="compare-badge badge-green">转正</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="fragment highlight-box orange" style="margin-top:16px">
+    <strong>解读：</strong>做空信号本身收益偏低（BTC 长期趋势向上）。MA 滤波的价值在于<strong>避开牛市中的做空信号</strong> —
+    30 天收益从 <strong>−2.99% → +0.82%</strong>，避免了大额亏损。做空策略的核心是<strong>防御</strong>，不是进攻。
+  </div>
+</section>
+
+<!-- SLIDE: Visual Comparison -->
+<section>
+  <h2>📊 超额收益可视化</h2>
+  <p style="font-size:0.7em;color:var(--fg2)">多信号做多 vs 原始 JLST 做多 — 各持有期对比</p>
+
+  <div style="margin-top:16px">
+    <div class="bar-wrap">
+      <div class="bar-label"><span>1 天 · JLST +0.66%</span><span style="color:var(--green)">多信号 +1.57%</span></div>
+      <div class="bar"><div class="bar-fill" style="width:15%;background:var(--fg2)"></div></div>
+      <div class="bar" style="margin-top:4px"><div class="bar-fill" style="width:35%;background:var(--green)"></div></div>
+    </div>
+    <div class="bar-wrap fragment">
+      <div class="bar-label"><span>3 天 · JLST +1.63%</span><span style="color:var(--green)">多信号 +3.37%</span></div>
+      <div class="bar"><div class="bar-fill" style="width:18%;background:var(--fg2)"></div></div>
+      <div class="bar" style="margin-top:4px"><div class="bar-fill" style="width:37%;background:var(--green)"></div></div>
+    </div>
+    <div class="bar-wrap fragment">
+      <div class="bar-label"><span>7 天 · JLST +2.82%</span><span style="color:var(--green)">多信号 +5.52%</span></div>
+      <div class="bar"><div class="bar-fill" style="width:25%;background:var(--fg2)"></div></div>
+      <div class="bar" style="margin-top:4px"><div class="bar-fill" style="width:49%;background:var(--green)"></div></div>
+    </div>
+    <div class="bar-wrap fragment">
+      <div class="bar-label"><span>30 天 · JLST +9.76%</span><span style="color:var(--green)">多信号 +18.82%</span></div>
+      <div class="bar"><div class="bar-fill" style="width:45%;background:var(--fg2)"></div></div>
+      <div class="bar" style="margin-top:4px"><div class="bar-fill" style="width:86%;background:var(--green)"></div></div>
+    </div>
+  </div>
+
+  <div class="fragment small" style="margin-top:20px">
+    灰色 = 原始 JLST 做多，绿色 = 多信号做多。每个周期的收益都几乎<strong>翻倍</strong>。
+  </div>
+</section>
+
+<!-- SLIDE: Key Takeaways -->
+<section>
+  <h2>🏆 核心数据总结</h2>
+
+  <div class="metric-row">
+    <div class="metric" style="border-top:3px solid var(--green)">
+      <div class="num" style="color:var(--green)">+18.82%</div>
+      <div class="label">多信号做多 30 日均收益</div>
+    </div>
+    <div class="metric" style="border-top:3px solid var(--accent)">
+      <div class="num" style="color:var(--accent)">+93%</div>
+      <div class="label">30 日超额收益提升</div>
+    </div>
+    <div class="metric" style="border-top:3px solid var(--orange)">
+      <div class="num" style="color:var(--orange)">65.1%</div>
+      <div class="label">3 日胜率（做多）</div>
+    </div>
+  </div>
+
+  <div class="fragment" style="margin-top:20px">
+    <div class="two-col">
+      <div class="highlight-box green">
+        <div style="font-size:0.9em;font-weight:700;margin-bottom:8px">📈 做多策略结论</div>
+        <ul style="font-size:0.75em;margin:0;padding-left:1em">
+          <li>MA 滤波后收益翻倍</li>
+          <li>胜率从 56-61% → 58-65%</li>
+          <li>信号数从 87 → 43（少而精）</li>
+          <li>每次信号平均 30 日赚 18.82%</li>
+        </ul>
+      </div>
+      <div class="highlight-box red">
+        <div style="font-size:0.9em;font-weight:700;margin-bottom:8px">📉 做空策略结论</div>
+        <ul style="font-size:0.75em;margin:0;padding-left:1em">
+          <li>滤波核心价值：避免牛市逆势做空</li>
+          <li>30 日从 −2.99% → +0.82%</li>
+          <li>信号数从 107 → 53（过滤假信号）</li>
+          <li>做空更适合防御/对冲，不做主策略</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SECTION 05: Dashboard -->
+<!-- ============================================ -->
+<section class="section-divider">
+  <div class="num">05</div>
+  <h2>仪表盘功能</h2>
+  <h3 style="text-align:center">BTC Signal Pro 使用指南</h3>
+</section>
+
+<!-- SLIDE: Dashboard Overview -->
+<section>
+  <h2>🖥️ 仪表盘全貌</h2>
+
+  <div class="three-col" style="margin-top:16px">
+    <div class="fragment" style="background:var(--card-bg);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:2em;margin-bottom:8px">📊</div>
+      <div style="font-size:0.85em;font-weight:600">综合评分面板</div>
+      <div style="font-size:0.65em;color:var(--fg2);margin-top:4px">反转 + 动量 + 资金费率<br>实时评分走势图</div>
+    </div>
+    <div class="fragment" style="background:var(--card-bg);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:2em;margin-bottom:8px">🕯️</div>
+      <div style="font-size:0.85em;font-weight:600">交互式 K 线图</div>
+      <div style="font-size:0.65em;color:var(--fg2);margin-top:4px">18 个技术指标<br>买卖信号标记叠加</div>
+    </div>
+    <div class="fragment" style="background:var(--card-bg);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:2em;margin-bottom:8px">🎯</div>
+      <div style="font-size:0.85em;font-weight:600">多信号筛选器</div>
+      <div style="font-size:0.65em;color:var(--fg2);margin-top:4px">5 个 MA 滤波开关<br>实时过滤 + Excel 导出</div>
+    </div>
+  </div>
+
+  <div class="fragment" style="margin-top:20px">
+    <div class="three-col">
+      <div style="background:var(--card-bg);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:2em;margin-bottom:8px">💰</div>
+        <div style="font-size:0.85em;font-weight:600">资金费率</div>
+        <div style="font-size:0.65em;color:var(--fg2);margin-top:4px">多空情绪指标<br>柱状图可视化</div>
+      </div>
+      <div style="background:var(--card-bg);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:2em;margin-bottom:8px">📅</div>
+        <div style="font-size:0.85em;font-weight:600">日线 / 周线切换</div>
+        <div style="font-size:0.65em;color:var(--fg2);margin-top:4px">双时间周期分析<br>减少噪声影响</div>
+      </div>
+      <div style="background:var(--card-bg);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:2em;margin-bottom:8px">🌙</div>
+        <div style="font-size:0.85em;font-weight:600">暗色/亮色主题</div>
+        <div style="font-size:0.65em;color:var(--fg2);margin-top:4px">一键切换<br>护眼模式</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: K-Line Chart Features -->
+<section>
+  <h2>🕯️ 交互式 K 线图</h2>
+  <p style="font-size:0.75em;color:var(--fg2)">18 个可切换技术指标 + JLST 买卖信号标记</p>
+
+  <div class="two-col" style="margin-top:16px">
+    <div>
+      <h3>价格叠加指标</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <span class="tag tag-blue">MA6</span>
+        <span class="tag tag-blue">MA20</span>
+        <span class="tag tag-blue">MA50</span>
+        <span class="tag tag-blue">MA103</span>
+        <span class="tag tag-blue">MA110</span>
+        <span class="tag tag-orange">EMA50</span>
+        <span class="tag tag-green">布林带</span>
+      </div>
+      <h3 style="margin-top:16px">副图指标</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <span class="tag tag-purple">成交量</span>
+        <span class="tag tag-purple">RSI</span>
+        <span class="tag tag-purple">MACD</span>
+        <span class="tag tag-purple">ATR</span>
+      </div>
+    </div>
+    <div>
+      <h3>特色功能</h3>
+      <ul style="font-size:0.8em">
+        <li class="fragment"><strong style="color:var(--green)">📌 信号标记：</strong>一键在 K 线上叠加 JLST 买卖信号<br>
+          <span class="small">绿色↑ = 做多 · 红色↓ = 做空 · 紫色⚡ = 级联</span></li>
+        <li class="fragment"><strong style="color:var(--accent)">ETF 溢价：</strong>IBIT/GBTC ETF 溢价率指标</li>
+        <li class="fragment"><strong style="color:var(--orange)">USDT.D：</strong>USDT 市值占比（资金流向指标）</li>
+        <li class="fragment"><strong>日线/周线切换：</strong>信号标记自动适配周线聚合</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE: How to Use -->
+<section>
+  <h2>📋 实操流程</h2>
+
+  <div style="margin-top:20px">
+    <div class="step-flow fragment">
+      <div class="step-box" style="border-top:3px solid var(--blue)">
+        <div style="font-size:1.5em">1️⃣</div>
+        <strong>看评分</strong><br>
+        <span style="font-size:0.8em;color:var(--fg2)">综合评分 ≶ ±0.5？</span>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step-box" style="border-top:3px solid var(--orange)">
+        <div style="font-size:1.5em">2️⃣</div>
+        <strong>看信号</strong><br>
+        <span style="font-size:0.8em;color:var(--fg2)">是否有做多/做空触发？</span>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step-box" style="border-top:3px solid var(--green)">
+        <div style="font-size:1.5em">3️⃣</div>
+        <strong>看滤波</strong><br>
+        <span style="font-size:0.8em;color:var(--fg2)">MA 条件是否满足？</span>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step-box" style="border-top:3px solid var(--purple)">
+        <div style="font-size:1.5em">4️⃣</div>
+        <strong>执行</strong><br>
+        <span style="font-size:0.8em;color:var(--fg2)">全部满足 → 开仓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fragment highlight-box" style="margin-top:24px;font-size:0.8em">
+    <strong>⚠️ 最佳实践：</strong>
+    <ul style="margin:8px 0 0;padding-left:1.2em">
+      <li>做多信号 + 三个 MA 条件全部满足 = <strong>最高质量信号</strong>（历史 30 日均收益 +18.82%）</li>
+      <li>做空信号在牛市中谨慎使用 — 更适合作为<strong>减仓/对冲</strong>依据而非做空依据</li>
+      <li>JLST 信号平均间隔约 30 天 — 这是一个<strong>低频高质量</strong>的策略，不适合日内交易</li>
+      <li>建议结合 K 线图上的技术指标（布林带、RSI）做二次确认</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- SECTION 06: Limitations & Summary -->
+<!-- ============================================ -->
+<section class="section-divider">
+  <div class="num">06</div>
+  <h2>局限与总结</h2>
+  <h3 style="text-align:center">诚实面对模型的边界</h3>
+</section>
+
+<!-- SLIDE: Limitations -->
+<section>
+  <h2>⚠️ 需要注意的事项</h2>
+
+  <ul class="emoji-list" style="font-size:0.82em">
+    <li class="fragment">📜 <strong>历史回测 ≠ 未来表现</strong> — 过去有效不保证将来盈利，市场结构会变化</li>
+    <li class="fragment">🔧 <strong>论文参数来自股票市场</strong> — 虽已做 BTC 适配（v2），但仍是近似而非精确</li>
+    <li class="fragment">⏰ <strong>低频策略</strong> — 约 30 天触发一次信号，不适合日内或高频交易者</li>
+    <li class="fragment">📉 <strong>做空信号效果一般</strong> — BTC 长期向上，做空天然逆风，胜率偏低</li>
+    <li class="fragment">🎛️ <strong>MA 参数可优化空间</strong> — 当前 MA110/MA103/EMA50 基于经验选择，用户可自行调整</li>
+    <li class="fragment">🌊 <strong>极端行情下信号会滞后</strong> — 2020 年 3 月暴跌等黑天鹅事件中，任何趋势指标都会滞后</li>
+  </ul>
+
+  <div class="fragment highlight-box orange" style="margin-top:16px">
+    <strong>正确定位：</strong>BTC Signal Pro 是<strong>辅助决策工具</strong>，不是自动赚钱机器。
+    它帮你过滤噪声、提供学术框架支撑的方向判断，但最终决策权在你。
+  </div>
+</section>
+
+<!-- SLIDE: Summary -->
+<section>
+  <h2>✅ 总结</h2>
+
+  <div class="two-col" style="margin-top:16px">
+    <div>
+      <div class="highlight-box" style="font-size:0.8em">
+        <div style="font-size:1.1em;margin-bottom:8px"><strong>🔬 理论基础</strong></div>
+        <ul style="margin:0;padding-left:1em">
+          <li>JLST (2025) RFS 论文 — 39 国验证</li>
+          <li>短期反转 + 中长期动量双因子</li>
+          <li>噪声交易者是关键中介变量</li>
+        </ul>
+      </div>
+      <div class="highlight-box green" style="font-size:0.8em;margin-top:12px">
+        <div style="font-size:1.1em;margin-bottom:8px"><strong>🎯 多信号策略</strong></div>
+        <ul style="margin:0;padding-left:1em">
+          <li>JLST 信号 + MA110/MA6&gt;MA103/EMA50</li>
+          <li>做多 30 日收益 +18.82%（胜率 58%）</li>
+          <li>超额收益比 JLST 原始信号提升 93%</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="highlight-box purple" style="font-size:0.8em">
+        <div style="font-size:1.1em;margin-bottom:8px"><strong>🖥️ 工具特色</strong></div>
+        <ul style="margin:0;padding-left:1em">
+          <li>每日自动更新数据</li>
+          <li>18 个技术指标 + 信号标记</li>
+          <li>5 个可配置 MA 滤波条件</li>
+          <li>日线/周线 · 暗/亮主题 · Excel 导出</li>
+        </ul>
+      </div>
+      <div style="background:var(--card-bg);border-radius:10px;padding:20px;text-align:center;margin-top:12px">
+        <div style="font-size:2em;margin-bottom:8px">🚀</div>
+        <div style="font-size:0.85em"><strong>立即使用</strong></div>
+        <div style="font-size:0.7em;color:var(--fg2);margin-top:4px">
+          <a href="https://hhysteric.github.io/btc-signal-pro/" style="color:var(--accent)" target="_blank">
+            hhysteric.github.io/btc-signal-pro
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>BTC Signal Pro · JLST Multi-Signal Strategy</span>
+    <span>基于 JLST (2025) RFS 论文</span>
+  </div>
+</section>
+
+</div><!-- /.slides -->
+</div><!-- /.reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    width: 1280,
+    height: 720,
+    margin: 0,
+    transition: 'slide',
+    backgroundTransition: 'fade',
+  });
+</script>
+</body>
+</html>
