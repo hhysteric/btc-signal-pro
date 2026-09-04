@@ -540,9 +540,19 @@ footer a { color: var(--accent2); text-decoration: none; }
         <button onclick="exportMultiSignals()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;font-family:var(--font)">📥 导出 Excel</button>
       </span>
     </div>
-    <div style="padding:12px 16px;font-size:12px;color:var(--fg2);border-bottom:1px solid var(--border)">
-      <strong>买入规则：</strong>JLST 买入信号 AND 价格 > MA110 AND MA6 > MA103 AND 价格 > EMA50<br>
-      <strong>卖出规则：</strong>JLST 卖出信号 AND (价格 &lt; MA110 OR 价格 &lt; EMA50)
+    <div style="padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+        <strong style="color:var(--green);min-width:90px">▲ 做多滤波：</strong>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-ma110" checked onchange="applyMultiFilter()"> 价格 &gt; MA110</label>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-ma6-103" checked onchange="applyMultiFilter()"> MA6 &gt; MA103</label>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-ema50" checked onchange="applyMultiFilter()"> 价格 &gt; EMA50</label>
+      </div>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+        <strong style="color:var(--red);min-width:90px">▼ 做空滤波：</strong>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-short-ma110" checked onchange="applyMultiFilter()"> 价格 &lt; MA110</label>
+        <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="f-short-ema50" checked onchange="applyMultiFilter()"> 价格 &lt; EMA50</label>
+      </div>
+      <div style="margin-top:6px;color:var(--fg3);font-size:11px">勾选 = 要求满足该条件才保留信号；全部取消 = 显示所有 JLST 原始信号（不做 MA 滤波）</div>
     </div>
     <div class="table-scroll">
       <table>
@@ -975,12 +985,14 @@ function createFundChart(container, data) {
     const t = tsToDate(d.timestamps[i]);
     const v = fr[i];
     fundByTime[timeKey(t)] = { fr: v };
-    if (v != null) lastValid = v;
-    fundData.push({
-      time: t,
-      value: v != null ? v : 0,
-      color: v != null ? (v >= 0 ? 'rgba(248,81,73,0.7)' : 'rgba(63,185,80,0.7)') : 'rgba(0,0,0,0)',
-    });
+    if (v != null) {
+      lastValid = v;
+      fundData.push({
+        time: t,
+        value: v,
+        color: v >= 0 ? 'rgba(248,81,73,0.7)' : 'rgba(63,185,80,0.7)',
+      });
+    }
   }
   fundSeries.setData(fundData);
   latestFund = lastValid;
@@ -1390,10 +1402,58 @@ function exportSignals() {
   XLSX.writeFile(wb, `JLST_v2_signals_${currentTF}.xlsx`);
 }
 
-// ── Multi-signal buy/sell table ──
-function updateMultiSignalTable(data) {
-  const signals = (data.signals_history || []).filter(s => s.multi_pass === true);
-  document.getElementById('multiSigCount').textContent = `${signals.length} 个通过 MA 滤波信号`;
+// ── Multi-signal buy/sell table (user-configurable filters) ──
+function getMultiFilterState() {
+  return {
+    long: {
+      ma110: document.getElementById('f-ma110').checked,
+      ma6_103: document.getElementById('f-ma6-103').checked,
+      ema50: document.getElementById('f-ema50').checked,
+    },
+    short: {
+      ma110: document.getElementById('f-short-ma110').checked,
+      ema50: document.getElementById('f-short-ema50').checked,
+    },
+  };
+}
+
+function filterMultiSignals(allSignals, filters) {
+  return allSignals.filter(s => {
+    if (s.type === 'long') {
+      if (filters.long.ma110 && s.ma110_ok !== true) return false;
+      if (filters.long.ma6_103 && s.ma6_gt_ma103 !== true) return false;
+      if (filters.long.ema50 && s.ema50_ok !== true) return false;
+      return true;
+    }
+    if (s.type === 'short') {
+      // 做空：要求价格在 MA 下方 → ma110_ok === false, ema50_ok === false
+      if (filters.short.ma110 && s.ma110_ok !== false) return false;
+      if (filters.short.ema50 && s.ema50_ok !== false) return false;
+      return true;
+    }
+    return false; // cascade → skip
+  });
+}
+
+function applyMultiFilter() {
+  const data = chartData[currentTF];
+  if (!data) return;
+  const allSignals = data.signals_history || [];
+  const filters = getMultiFilterState();
+  const signals = filterMultiSignals(allSignals, filters);
+
+  // Count active filters for label
+  const activeCount = Object.values(filters.long).filter(Boolean).length + Object.values(filters.short).filter(Boolean).length;
+  const baseCount = allSignals.filter(s => s.type === 'long' || s.type === 'short').length;
+  const label = activeCount > 0
+    ? `${signals.length} / ${baseCount} 个信号（${activeCount} 个滤波条件）`
+    : `${baseCount} 个信号（无 MA 滤波）`;
+  document.getElementById('multiSigCount').textContent = label;
+
+  renderMultiTable(signals);
+}
+
+function renderMultiTable(signals) {
   const body = document.getElementById('multiSigBody');
 
   const fmtCheck = (v) => v === true ? '<td style="color:var(--green)">✓</td>' : v === false ? '<td style="color:var(--red)">✗</td>' : '<td style="color:var(--fg2)">--</td>';
@@ -1439,7 +1499,8 @@ function updateMultiSignalTable(data) {
 function exportMultiSignals() {
   const data = chartData[currentTF];
   if (!data || !data.signals_history) return;
-  const signals = data.signals_history.filter(s => s.multi_pass === true);
+  const filters = getMultiFilterState();
+  const signals = filterMultiSignals(data.signals_history, filters);
   const header = ['日期','类型','价格','MA110','MA6>MA103','EMA50','综合评分','1日收益%','3日收益%','5日收益%','7日收益%','30日收益%'];
   const typeMap = {long:'做多',short:'做空',cascade:'级联'};
   const boolMap = v => v === true ? '✓' : v === false ? '✗' : '';
@@ -1482,7 +1543,7 @@ async function render(tf) {
   syncTimeScales();
   updateDashboard(data);
   updateSignalTable(data);
-  updateMultiSignalTable(data);
+  applyMultiFilter();
 
   const d = data.data;
   if (d.timestamps.length > 0) {
