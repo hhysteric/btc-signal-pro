@@ -511,6 +511,8 @@ footer a { color: var(--accent2); text-decoration: none; }
       <button data-tv-indicator="rr" class="tv-toggle-btn" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid var(--border)">风险回报</button>
       <button data-tv-indicator="etf" class="tv-toggle-btn" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid var(--border)">ETF</button>
       <span style="width:1px;height:20px;background:var(--border);margin:0 4px;align-self:center"></span>
+      <button id="tv-signals-btn" class="tv-toggle-btn" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid var(--border)" title="JLST 买卖信号标记">📌 信号</button>
+      <span style="width:1px;height:20px;background:var(--border);margin:0 4px;align-self:center"></span>
       <button data-tv-indicator="usdtd" class="tv-toggle-btn" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid var(--border)">USDT.D</button>
       <button data-tv-invert="usdtd" class="tv-toggle-btn" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid var(--border)" title="翻转 USDT.D 坐标">⇅U</button>
       <button data-tv-indicator="btcd" class="tv-toggle-btn" style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid var(--border)">BTC.D</button>
@@ -1574,7 +1576,87 @@ async function render(tf) {
       DataModule.loadUrpdCSV && DataModule.loadUrpdCSV(),
     ].filter(Boolean));
     if (typeof SmmModule !== 'undefined') SmmModule.compute();
-    if (typeof TvChartModule !== 'undefined') TvChartModule.init();
+    if (typeof TvChartModule !== 'undefined') {
+      TvChartModule.init();
+
+      // ── Signal markers on TV chart ──
+      let tvSignalsActive = false;
+
+      function buildTvSignalMarkers() {
+        const data = chartData[currentTF];
+        if (!data || !data.data) return [];
+        const d = data.data;
+        const isWeekly = TvChartModule._timeframe === 'weekly';
+
+        // Build a date→signal map from JLST data
+        const sigMap = new Map();
+        for (let i = 0; i < d.timestamps.length; i++) {
+          const dateStr = new Date(d.timestamps[i]).toISOString().slice(0, 10);
+          if (d.long_sig[i]) sigMap.set(dateStr, { type: 'long' });
+          else if (d.short_sig[i]) sigMap.set(dateStr, { type: 'short' });
+          else if (d.cascade && d.cascade[i]) sigMap.set(dateStr, { type: 'cascade' });
+        }
+
+        // Get OHLC dates from TvChartModule's data source
+        const src = TvChartModule._getSourceData();
+        const markers = [];
+        for (const bar of src) {
+          const day = bar.date.toISOString().slice(0, 10);
+          const sig = sigMap.get(day);
+          if (!sig) {
+            // For weekly: check if any day in that week has a signal
+            if (isWeekly) {
+              const dt = new Date(bar.date);
+              for (let off = 1; off < 7; off++) {
+                const nd = new Date(dt.getTime() + off * 86400000);
+                const nds = nd.toISOString().slice(0, 10);
+                const s2 = sigMap.get(nds);
+                if (s2) {
+                  markers.push(_makeTvMarker(day, s2.type));
+                  break;
+                }
+              }
+            }
+            continue;
+          }
+          markers.push(_makeTvMarker(day, sig.type));
+        }
+        markers.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+        return markers;
+      }
+
+      function _makeTvMarker(dateStr, type) {
+        if (type === 'long') return { time: dateStr, position: 'belowBar', color: '#3fb950', shape: 'arrowUp', text: '多' };
+        if (type === 'short') return { time: dateStr, position: 'aboveBar', color: '#f85149', shape: 'arrowDown', text: '空' };
+        return { time: dateStr, position: 'aboveBar', color: '#bc8cff', shape: 'circle', text: '⚡' };
+      }
+
+      function applyTvSignals() {
+        if (!TvChartModule.candleSeries) return;
+        if (tvSignalsActive) {
+          TvChartModule.candleSeries.setMarkers(buildTvSignalMarkers());
+        } else {
+          TvChartModule.candleSeries.setMarkers([]);
+        }
+      }
+
+      // Button click
+      const sigBtn = document.getElementById('tv-signals-btn');
+      if (sigBtn) {
+        sigBtn.addEventListener('click', () => {
+          tvSignalsActive = !tvSignalsActive;
+          sigBtn.classList.toggle('active', tvSignalsActive);
+          applyTvSignals();
+        });
+      }
+
+      // Re-apply markers after timeframe switch (setData clears markers)
+      const origSetTimeframe = TvChartModule.setTimeframe.bind(TvChartModule);
+      TvChartModule.setTimeframe = function(tf) {
+        origSetTimeframe(tf);
+        applyTvSignals();
+      };
+    }
   } catch (e) {
     console.warn('TV Chart init error:', e);
   }
