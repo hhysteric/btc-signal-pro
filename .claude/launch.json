@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "btc-signal-pro",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8765", "-d", "C:\\Users\\hongfuchuan\\Desktop\\btc-signal-pro"],
+      "port": 8765
+    }
+  ]
+}
