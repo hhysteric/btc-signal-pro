@@ -983,11 +983,15 @@ function createFundChart(container, data) {
 
   const fundData = [];
   let lastValid = null;
+  // Build price→fund logical index mapping while iterating
+  priceToFundIdx = new Array(d.timestamps.length);
+  let fundIdx = -1;
   for (let i = 0; i < d.timestamps.length; i++) {
     const t = tsToDate(d.timestamps[i]);
     const v = fr[i];
     fundByTime[timeKey(t)] = { fr: v };
     if (v != null) {
+      fundIdx++;
       lastValid = v;
       fundData.push({
         time: t,
@@ -995,7 +999,9 @@ function createFundChart(container, data) {
         color: v >= 0 ? 'rgba(248,81,73,0.7)' : 'rgba(63,185,80,0.7)',
       });
     }
+    priceToFundIdx[i] = fundIdx; // -1 if no fund data at or before this bar
   }
+  fundBarCount = fundData.length;
   fundSeries.setData(fundData);
   latestFund = lastValid;
   // Record data range for time-based sync clipping
@@ -1057,39 +1063,53 @@ function lockSync() {
   syncRAF = requestAnimationFrame(() => { isSyncing = false; });
 }
 
+// Map price logical bar index → fund logical bar index for sync
+let priceToFundIdx = null;  // array[priceBarIdx] = fundBarIdx | -1
+let fundBarCount = 0;
+
+function syncFundToPrice(priceRange) {
+  if (!fundChartObj || !priceToFundIdx || fundBarCount <= 0) return;
+  try {
+    const totalPriceBars = priceToFundIdx.length;
+    const maxIdx = totalPriceBars - 1;
+    const fromBar = Math.max(0, Math.min(Math.floor(priceRange.from), maxIdx));
+    const toBar = Math.max(0, Math.min(Math.floor(priceRange.to), maxIdx));
+    let fFrom = priceToFundIdx[fromBar];
+    let fTo = priceToFundIdx[toBar];
+    if (fFrom < 0) fFrom = 0;
+    if (fTo < 0) fTo = 0;
+    // When both map to same fund bar (e.g. zoomed into area past fund data),
+    // show proportional number of fund bars based on zoom level
+    if (fTo <= fFrom) {
+      const visiblePriceBars = Math.max(1, priceRange.to - priceRange.from);
+      const ratio = visiblePriceBars / totalPriceBars;
+      const visibleFundBars = Math.max(2, Math.round(ratio * fundBarCount));
+      fFrom = Math.max(0, fTo - visibleFundBars);
+    }
+    fundChartObj.timeScale().setVisibleLogicalRange({ from: fFrom, to: fTo });
+  } catch (_) {}
+}
+
 function syncTimeScales() {
-  // 1) Price ↔ Composite: logical range (they share the same timestamps)
   const pairCharts = [priceChartObj, compChartObj].filter(Boolean);
   pairCharts.forEach((src, si) => {
     src.timeScale().subscribeVisibleLogicalRangeChange(range => {
       if (isSyncing || !range) return;
       lockSync();
       pairCharts.forEach((tgt, ti) => { if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range); });
-      // 2) Funding follows price via time range, clipped to funding data bounds
-      if (fundChartObj && fundDataRange) {
-        try {
-          const visRange = src.timeScale().getVisibleRange();
-          if (visRange) {
-            const vFrom = dateToNum(visRange.from), vTo = dateToNum(visRange.to);
-            const dFrom = dateToNum(fundDataRange.from), dTo = dateToNum(fundDataRange.to);
-            const from = vFrom < dFrom ? fundDataRange.from : visRange.from;
-            const to = vTo > dTo ? fundDataRange.to : visRange.to;
-            if (dateToNum(from) < dateToNum(to)) {
-              fundChartObj.timeScale().setVisibleRange({ from, to });
-            }
-          }
-        } catch (_) { /* getVisibleRange may throw if chart not ready */ }
-      }
+      syncFundToPrice(range);
     });
   });
 
-  // 3) Funding chart is read-only for sync — it follows price/comp only.
-  //    Disable user interaction on funding's time scale to avoid desync.
+  // Funding chart is read-only — follows price/comp only
   if (fundChartObj) {
-    fundChartObj.applyOptions({
-      handleScroll: false,
-      handleScale: false,
-    });
+    fundChartObj.applyOptions({ handleScroll: false, handleScale: false });
+  }
+
+  // Initial sync: apply current price range to fund chart
+  if (priceChartObj) {
+    const range = priceChartObj.timeScale().getVisibleLogicalRange();
+    if (range) syncFundToPrice(range);
   }
 }
 
