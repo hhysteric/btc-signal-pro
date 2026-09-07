@@ -648,7 +648,7 @@ function toggleTheme() {
 
 // ── Data loading ──
 async function loadData(tf) {
-  const url = `${DATA_BASE}btc_v2_${tf}.json`;
+  const url = `${DATA_BASE}btc_v2_${tf}.json?v=${Date.now()}`;
   try {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -983,33 +983,25 @@ function createFundChart(container, data) {
 
   const fundData = [];
   let lastValid = null;
-  // Build price→fund logical index mapping while iterating
-  priceToFundIdx = new Array(d.timestamps.length);
-  let fundIdx = -1;
+  // Push ALL timestamps so logical indices align 1:1 with price/comp charts.
+  // Null funding values get value:0 + transparent color (invisible bar, but occupies space).
   for (let i = 0; i < d.timestamps.length; i++) {
     const t = tsToDate(d.timestamps[i]);
     const v = fr[i];
     fundByTime[timeKey(t)] = { fr: v };
     if (v != null) {
-      fundIdx++;
       lastValid = v;
       fundData.push({
         time: t,
         value: v,
         color: v >= 0 ? 'rgba(248,81,73,0.7)' : 'rgba(63,185,80,0.7)',
       });
+    } else {
+      fundData.push({ time: t, value: 0, color: 'rgba(0,0,0,0)' });
     }
-    priceToFundIdx[i] = fundIdx; // -1 if no fund data at or before this bar
   }
-  fundBarCount = fundData.length;
   fundSeries.setData(fundData);
   latestFund = lastValid;
-  // Record data range for time-based sync clipping
-  if (fundData.length > 0) {
-    fundDataRange = { from: fundData[0].time, to: fundData[fundData.length - 1].time };
-  } else {
-    fundDataRange = null;
-  }
 
   // Display latest
   const latEl = document.getElementById('fundLatest');
@@ -1044,73 +1036,28 @@ function createFundChart(container, data) {
 }
 
 // ── Time scale sync ──
-// Price ↔ Composite: logical range sync (same data length, 1:1 mapping)
-// Funding: follows price's *time* range, clipped to its own data bounds
+// All three charts share the same timestamps array, so logical range = 1:1.
+// Simple: any chart's visible range change → set same range on the other two.
 let isSyncing = false;
 let syncRAF = 0;
-let fundDataRange = null;   // { from: {year,month,day}, to: {year,month,day} }
 
-// Convert Lightweight Charts date to comparable integer YYYYMMDD
-function dateToNum(d) {
-  if (typeof d === 'string') { const p = d.split('-'); return +p[0] * 10000 + +p[1] * 100 + +p[2]; }
-  return d.year * 10000 + d.month * 100 + d.day;
-}
-
-// Lock sync flag and release it on next animation frame to prevent ping-pong
 function lockSync() {
   isSyncing = true;
   cancelAnimationFrame(syncRAF);
   syncRAF = requestAnimationFrame(() => { isSyncing = false; });
 }
 
-// Map price logical bar index → fund logical bar index for sync
-let priceToFundIdx = null;  // array[priceBarIdx] = fundBarIdx | -1
-let fundBarCount = 0;
-
-function syncFundToPrice(priceRange) {
-  if (!fundChartObj || !priceToFundIdx || fundBarCount <= 0) return;
-  try {
-    const totalPriceBars = priceToFundIdx.length;
-    const maxIdx = totalPriceBars - 1;
-    const fromBar = Math.max(0, Math.min(Math.floor(priceRange.from), maxIdx));
-    const toBar = Math.max(0, Math.min(Math.floor(priceRange.to), maxIdx));
-    let fFrom = priceToFundIdx[fromBar];
-    let fTo = priceToFundIdx[toBar];
-    if (fFrom < 0) fFrom = 0;
-    if (fTo < 0) fTo = 0;
-    // When both map to same fund bar (e.g. zoomed into area past fund data),
-    // show proportional number of fund bars based on zoom level
-    if (fTo <= fFrom) {
-      const visiblePriceBars = Math.max(1, priceRange.to - priceRange.from);
-      const ratio = visiblePriceBars / totalPriceBars;
-      const visibleFundBars = Math.max(2, Math.round(ratio * fundBarCount));
-      fFrom = Math.max(0, fTo - visibleFundBars);
-    }
-    fundChartObj.timeScale().setVisibleLogicalRange({ from: fFrom, to: fTo });
-  } catch (_) {}
-}
-
 function syncTimeScales() {
-  const pairCharts = [priceChartObj, compChartObj].filter(Boolean);
-  pairCharts.forEach((src, si) => {
+  const allCharts = [priceChartObj, compChartObj, fundChartObj].filter(Boolean);
+  allCharts.forEach((src, si) => {
     src.timeScale().subscribeVisibleLogicalRangeChange(range => {
       if (isSyncing || !range) return;
       lockSync();
-      pairCharts.forEach((tgt, ti) => { if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range); });
-      syncFundToPrice(range);
+      allCharts.forEach((tgt, ti) => {
+        if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range);
+      });
     });
   });
-
-  // Funding chart is read-only — follows price/comp only
-  if (fundChartObj) {
-    fundChartObj.applyOptions({ handleScroll: false, handleScale: false });
-  }
-
-  // Initial sync: apply current price range to fund chart
-  if (priceChartObj) {
-    const range = priceChartObj.timeScale().getVisibleLogicalRange();
-    if (range) syncFundToPrice(range);
-  }
 }
 
 // ── Indicator toggle ──
@@ -1220,6 +1167,16 @@ function toggleFullscreen() {
     createCompChart(document.getElementById('fsCompChart'), data);
     createFundChart(document.getElementById('fsFundChart'), data);
     syncTimeScales();
+    requestAnimationFrame(() => {
+      if (priceChartObj) {
+        const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
+        if (initRange) {
+          isSyncing = true;
+          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+          requestAnimationFrame(() => { isSyncing = false; });
+        }
+      }
+    });
     applyIndicatorState();
   }
 
@@ -1319,6 +1276,16 @@ function exitFullscreen() {
     createCompChart(document.getElementById('compChart'), data);
     createFundChart(document.getElementById('fundChart'), data);
     syncTimeScales();
+    requestAnimationFrame(() => {
+      if (priceChartObj) {
+        const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
+        if (initRange) {
+          isSyncing = true;
+          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+          requestAnimationFrame(() => { isSyncing = false; });
+        }
+      }
+    });
     applyIndicatorState();
   }
 }
@@ -1614,6 +1581,17 @@ async function render(tf) {
   createCompChart(document.getElementById('compChart'), data);
   createFundChart(document.getElementById('fundChart'), data);
   syncTimeScales();
+  // Force all charts to same initial visible range as price chart (after render)
+  requestAnimationFrame(() => {
+    if (priceChartObj) {
+      const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
+      if (initRange) {
+        isSyncing = true;
+        [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+        requestAnimationFrame(() => { isSyncing = false; });
+      }
+    }
+  });
   updateDashboard(data);
   updateSignalTable(data);
   applyMultiFilter();
