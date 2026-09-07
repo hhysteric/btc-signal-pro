@@ -25,10 +25,10 @@ const DataModule = {
     dominanceData: [], // [{date, btcD, usdtD}] 升序，百分比值
     _mvrvBands: null,
 
-    // 每日缓存击穿参数：让浏览器每天重新拉一次 CSV，确保拿到当天 Actions 更新后的最新数据
+    // 缓存击穿参数：精确到小时，确保本地开发和 Actions 更新后都能拿到最新数据
     _cacheBust() {
         const d = new Date();
-        return '?v=' + d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+        return '?v=' + d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0') + String(d.getUTCHours()).padStart(2, '0');
     },
 
     async loadCSV() {
