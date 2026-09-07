@@ -1083,19 +1083,12 @@ function syncTimeScales() {
     });
   });
 
-  // 3) When user scrolls/zooms the funding chart, sync back to price/comp
+  // 3) Funding chart is read-only for sync — it follows price/comp only.
+  //    Disable user interaction on funding's time scale to avoid desync.
   if (fundChartObj) {
-    fundChartObj.timeScale().subscribeVisibleLogicalRangeChange(range => {
-      if (isSyncing || !range) return;
-      lockSync();
-      try {
-        const visRange = fundChartObj.timeScale().getVisibleRange();
-        if (visRange) {
-          pairCharts.forEach(c => {
-            try { c.timeScale().setVisibleRange(visRange); } catch(_) {}
-          });
-        }
-      } catch (_) {}
+    fundChartObj.applyOptions({
+      handleScroll: false,
+      handleScale: false,
     });
   }
 }
