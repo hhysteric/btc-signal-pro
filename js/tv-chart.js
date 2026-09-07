@@ -68,6 +68,7 @@ const TvChartModule = {
         this._bindButtons();
         this._bindThemeObserver();
         this._bindLegend();
+        this._bindDragScroll();
     },
 
     // ─── 时间周期切换 ─────────────────────────────────────────────
@@ -413,10 +414,10 @@ const TvChartModule = {
                 borderColor: isDark ? '#374151' : '#e5e7eb',
             },
             crosshair: {
-                mode: LightweightCharts.CrosshairMode.Magnet,
+                mode: LightweightCharts.CrosshairMode.Normal,
             },
             handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: false, axisDoubleClickReset: { time: true, price: true } },
-            handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
+            handleScroll: false,
         };
     },
 
@@ -456,6 +457,46 @@ const TvChartModule = {
         document.querySelectorAll('[data-tv-timeframe]').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tvTimeframe === this._timeframe);
         });
+    },
+
+    // ─── 自定义拖动滚动（替代内置 handleScroll，避免缩放冲突）────
+    _bindDragScroll() {
+        const el = this._container;
+        if (!el) return;
+        let dragging = false;
+        let lastX = 0;
+
+        const onDown = (e) => {
+            if (e.button !== 0) return;         // 仅左键
+            dragging = true;
+            lastX = e.clientX;
+            el.style.cursor = 'grabbing';
+        };
+        const onMove = (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - lastX;
+            if (dx === 0) return;
+            lastX = e.clientX;
+            const ts = this.chart.timeScale();
+            const range = ts.getVisibleLogicalRange();
+            if (!range) return;
+            // 每像素对应的 bar 数 — 容器宽度 / 可见 bar 数
+            const barsPerPx = (range.to - range.from) / el.clientWidth;
+            const shift = -dx * barsPerPx;
+            ts.setVisibleLogicalRange({
+                from: range.from + shift,
+                to: range.to + shift,
+            });
+        };
+        const onUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            el.style.cursor = '';
+        };
+
+        el.addEventListener('mousedown', onDown);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
     },
 
     // ─── 主题跟随 ─────────────────────────────────────────────────
