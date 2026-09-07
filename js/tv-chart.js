@@ -413,9 +413,9 @@ const TvChartModule = {
                 borderColor: isDark ? '#374151' : '#e5e7eb',
             },
             crosshair: {
-                mode: LightweightCharts.CrosshairMode.Normal,
+                mode: LightweightCharts.CrosshairMode.Magnet,
             },
-            handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+            handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false } },
             handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
         };
     },
