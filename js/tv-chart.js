@@ -406,7 +406,7 @@ const TvChartModule = {
             },
             timeScale: {
                 borderColor: isDark ? '#374151' : '#e5e7eb',
-                rightOffset: 5,
+                rightOffset: 2,
                 timeVisible: false,
             },
             rightPriceScale: {

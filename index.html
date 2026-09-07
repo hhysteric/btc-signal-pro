@@ -1039,26 +1039,32 @@ function createFundChart(container, data) {
 }
 
 // ── Time scale sync ──
-// Use visible TIME range (not logical range) so null-skipping in each series
-// doesn't cause misalignment — dates are absolute, index positions are not.
+// All three charts have identical data-point counts (same timestamps array),
+// so logical range = 1:1. Use LOGICAL range for sync: setVisibleLogicalRange
+// maps index→index without recomputing barSpacing, so continuous drag stays
+// stable (setVisibleRange would re-fit the time span → barSpacing drift → jitter).
+// Visual left-edge alignment is handled separately by PRICE_SCALE_MIN_W.
+//
+// The isSyncing guard is set and cleared SYNCHRONOUSLY around the fan-out.
+// setVisibleLogicalRange fires the target charts' callbacks synchronously and
+// re-entrantly during the loop; they see isSyncing===true and bail. Clearing
+// in a finally (not on a rAF) means each drag event is handled on its own frame
+// with no cross-frame lock leakage — this is what fixes the drag jitter.
 let isSyncing = false;
-let syncRAF = 0;
-
-function lockSync() {
-  isSyncing = true;
-  cancelAnimationFrame(syncRAF);
-  syncRAF = requestAnimationFrame(() => { isSyncing = false; });
-}
 
 function syncTimeScales() {
   const allCharts = [priceChartObj, compChartObj, fundChartObj].filter(Boolean);
   allCharts.forEach((src, si) => {
-    src.timeScale().subscribeVisibleTimeRangeChange(range => {
+    src.timeScale().subscribeVisibleLogicalRangeChange(range => {
       if (isSyncing || !range) return;
-      lockSync();
-      allCharts.forEach((tgt, ti) => {
-        if (ti !== si) tgt.timeScale().setVisibleRange(range);
-      });
+      isSyncing = true;
+      try {
+        allCharts.forEach((tgt, ti) => {
+          if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range);
+        });
+      } finally {
+        isSyncing = false;
+      }
     });
   });
 }
@@ -1172,11 +1178,14 @@ function toggleFullscreen() {
     syncTimeScales();
     requestAnimationFrame(() => {
       if (priceChartObj) {
-        const initRange = priceChartObj.timeScale().getVisibleRange();
+        const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
         if (initRange) {
           isSyncing = true;
-          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleRange(initRange); });
-          requestAnimationFrame(() => { isSyncing = false; });
+          try {
+            [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+          } finally {
+            isSyncing = false;
+          }
         }
       }
     });
@@ -1281,11 +1290,14 @@ function exitFullscreen() {
     syncTimeScales();
     requestAnimationFrame(() => {
       if (priceChartObj) {
-        const initRange = priceChartObj.timeScale().getVisibleRange();
+        const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
         if (initRange) {
           isSyncing = true;
-          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleRange(initRange); });
-          requestAnimationFrame(() => { isSyncing = false; });
+          try {
+            [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+          } finally {
+            isSyncing = false;
+          }
         }
       }
     });
@@ -1584,14 +1596,17 @@ async function render(tf) {
   createCompChart(document.getElementById('compChart'), data);
   createFundChart(document.getElementById('fundChart'), data);
   syncTimeScales();
-  // Force all charts to same initial visible time range as price chart
+  // Force all charts to same initial visible logical range as price chart
   requestAnimationFrame(() => {
     if (priceChartObj) {
-      const initRange = priceChartObj.timeScale().getVisibleRange();
+      const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
       if (initRange) {
         isSyncing = true;
-        [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleRange(initRange); });
-        requestAnimationFrame(() => { isSyncing = false; });
+        try {
+          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+        } finally {
+          isSyncing = false;
+        }
       }
     }
   });
