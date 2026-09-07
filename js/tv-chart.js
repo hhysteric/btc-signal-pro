@@ -415,7 +415,7 @@ const TvChartModule = {
             crosshair: {
                 mode: LightweightCharts.CrosshairMode.Magnet,
             },
-            handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false } },
+            handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: false, axisDoubleClickReset: { time: true, price: true } },
             handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
         };
     },
