@@ -1041,6 +1041,7 @@ function createFundChart(container, data) {
 // Price ↔ Composite: logical range sync (same data length, 1:1 mapping)
 // Funding: follows price's *time* range, clipped to its own data bounds
 let isSyncing = false;
+let syncRAF = 0;
 let fundDataRange = null;   // { from: {year,month,day}, to: {year,month,day} }
 
 // Convert Lightweight Charts date to comparable integer YYYYMMDD
@@ -1049,13 +1050,20 @@ function dateToNum(d) {
   return d.year * 10000 + d.month * 100 + d.day;
 }
 
+// Lock sync flag and release it on next animation frame to prevent ping-pong
+function lockSync() {
+  isSyncing = true;
+  cancelAnimationFrame(syncRAF);
+  syncRAF = requestAnimationFrame(() => { isSyncing = false; });
+}
+
 function syncTimeScales() {
   // 1) Price ↔ Composite: logical range (they share the same timestamps)
   const pairCharts = [priceChartObj, compChartObj].filter(Boolean);
   pairCharts.forEach((src, si) => {
     src.timeScale().subscribeVisibleLogicalRangeChange(range => {
       if (isSyncing || !range) return;
-      isSyncing = true;
+      lockSync();
       pairCharts.forEach((tgt, ti) => { if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range); });
       // 2) Funding follows price via time range, clipped to funding data bounds
       if (fundChartObj && fundDataRange) {
@@ -1072,7 +1080,6 @@ function syncTimeScales() {
           }
         } catch (_) { /* getVisibleRange may throw if chart not ready */ }
       }
-      isSyncing = false;
     });
   });
 
@@ -1080,7 +1087,7 @@ function syncTimeScales() {
   if (fundChartObj) {
     fundChartObj.timeScale().subscribeVisibleLogicalRangeChange(range => {
       if (isSyncing || !range) return;
-      isSyncing = true;
+      lockSync();
       try {
         const visRange = fundChartObj.timeScale().getVisibleRange();
         if (visRange) {
@@ -1089,7 +1096,6 @@ function syncTimeScales() {
           });
         }
       } catch (_) {}
-      isSyncing = false;
     });
   }
 }
