@@ -998,6 +998,12 @@ function createFundChart(container, data) {
   }
   fundSeries.setData(fundData);
   latestFund = lastValid;
+  // Record data range for time-based sync clipping
+  if (fundData.length > 0) {
+    fundDataRange = { from: fundData[0].time, to: fundData[fundData.length - 1].time };
+  } else {
+    fundDataRange = null;
+  }
 
   // Display latest
   const latEl = document.getElementById('fundLatest');
@@ -1031,18 +1037,61 @@ function createFundChart(container, data) {
   new ResizeObserver(() => { chart.applyOptions({ width: container.clientWidth, height: container.clientHeight || 120 }); }).observe(container);
 }
 
-// ── Time scale sync (3-way) ──
+// ── Time scale sync ──
+// Price ↔ Composite: logical range sync (same data length, 1:1 mapping)
+// Funding: follows price's *time* range, clipped to its own data bounds
 let isSyncing = false;
+let fundDataRange = null;   // { from: {year,month,day}, to: {year,month,day} }
+
+// Convert Lightweight Charts date to comparable integer YYYYMMDD
+function dateToNum(d) {
+  if (typeof d === 'string') { const p = d.split('-'); return +p[0] * 10000 + +p[1] * 100 + +p[2]; }
+  return d.year * 10000 + d.month * 100 + d.day;
+}
+
 function syncTimeScales() {
-  const charts = [priceChartObj, compChartObj, fundChartObj].filter(Boolean);
-  charts.forEach((src, si) => {
+  // 1) Price ↔ Composite: logical range (they share the same timestamps)
+  const pairCharts = [priceChartObj, compChartObj].filter(Boolean);
+  pairCharts.forEach((src, si) => {
     src.timeScale().subscribeVisibleLogicalRangeChange(range => {
       if (isSyncing || !range) return;
       isSyncing = true;
-      charts.forEach((tgt, ti) => { if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range); });
+      pairCharts.forEach((tgt, ti) => { if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range); });
+      // 2) Funding follows price via time range, clipped to funding data bounds
+      if (fundChartObj && fundDataRange) {
+        try {
+          const visRange = src.timeScale().getVisibleRange();
+          if (visRange) {
+            const vFrom = dateToNum(visRange.from), vTo = dateToNum(visRange.to);
+            const dFrom = dateToNum(fundDataRange.from), dTo = dateToNum(fundDataRange.to);
+            const from = vFrom < dFrom ? fundDataRange.from : visRange.from;
+            const to = vTo > dTo ? fundDataRange.to : visRange.to;
+            if (dateToNum(from) < dateToNum(to)) {
+              fundChartObj.timeScale().setVisibleRange({ from, to });
+            }
+          }
+        } catch (_) { /* getVisibleRange may throw if chart not ready */ }
+      }
       isSyncing = false;
     });
   });
+
+  // 3) When user scrolls/zooms the funding chart, sync back to price/comp
+  if (fundChartObj) {
+    fundChartObj.timeScale().subscribeVisibleLogicalRangeChange(range => {
+      if (isSyncing || !range) return;
+      isSyncing = true;
+      try {
+        const visRange = fundChartObj.timeScale().getVisibleRange();
+        if (visRange) {
+          pairCharts.forEach(c => {
+            try { c.timeScale().setVisibleRange(visRange); } catch(_) {}
+          });
+        }
+      } catch (_) {}
+      isSyncing = false;
+    });
+  }
 }
 
 // ── Indicator toggle ──
@@ -1420,6 +1469,9 @@ function getMultiFilterState() {
 }
 
 function filterMultiSignals(allSignals, filters) {
+  // Check if any filter is active at all
+  const anyActive = Object.values(filters.long).some(Boolean) || Object.values(filters.short).some(Boolean);
+
   return allSignals.filter(s => {
     if (s.type === 'long') {
       if (filters.long.ma110 && s.ma110_ok !== true) return false;
@@ -1433,7 +1485,8 @@ function filterMultiSignals(allSignals, filters) {
       if (filters.short.ema50 && s.ema50_ok !== false) return false;
       return true;
     }
-    return false; // cascade → skip
+    // cascade: include when no filters active, exclude when filtering
+    return !anyActive;
   });
 }
 
@@ -1446,10 +1499,9 @@ function applyMultiFilter() {
 
   // Count active filters for label
   const activeCount = Object.values(filters.long).filter(Boolean).length + Object.values(filters.short).filter(Boolean).length;
-  const baseCount = allSignals.filter(s => s.type === 'long' || s.type === 'short').length;
   const label = activeCount > 0
-    ? `${signals.length} / ${baseCount} 个信号（${activeCount} 个滤波条件）`
-    : `${baseCount} 个信号（无 MA 滤波）`;
+    ? `${signals.length} / ${allSignals.length} 个信号（${activeCount} 个滤波条件）`
+    : `${allSignals.length} 个信号（无 MA 滤波）`;
   document.getElementById('multiSigCount').textContent = label;
 
   renderMultiTable(signals);
