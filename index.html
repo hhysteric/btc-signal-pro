@@ -753,6 +753,9 @@ function updateFundLegend(fr) {
 }
 
 // ── Chart: Price ──
+// Fixed price-scale width so all three charts align vertically
+const PRICE_SCALE_MIN_W = 70;
+
 function createPriceChart(container, data) {
   const tfLabels = { daily: '日线', weekly: '周线', monthly: '月线' };
   container.innerHTML = '';
@@ -764,7 +767,7 @@ function createPriceChart(container, data) {
     grid: { vertLines: { color: ct.grid }, horzLines: { color: ct.grid } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     timeScale: { timeVisible: false, borderVisible: false, borderColor: ct.border },
-    rightPriceScale: { borderColor: ct.border },
+    rightPriceScale: { borderColor: ct.border, minimumWidth: PRICE_SCALE_MIN_W },
   });
   priceChartObj = chart;
 
@@ -868,7 +871,7 @@ function createCompChart(container, data) {
     grid: { vertLines: { color: ct.grid }, horzLines: { color: ct.grid } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     timeScale: { timeVisible: false, borderVisible: false, borderColor: ct.border },
-    rightPriceScale: { borderColor: ct.border },
+    rightPriceScale: { borderColor: ct.border, minimumWidth: PRICE_SCALE_MIN_W },
   });
   compChartObj = chart;
 
@@ -963,7 +966,7 @@ function createFundChart(container, data) {
     grid: { vertLines: { color: ct.grid }, horzLines: { color: ct.grid } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     timeScale: { timeVisible: false, borderVisible: false, borderColor: ct.border },
-    rightPriceScale: { borderColor: ct.border },
+    rightPriceScale: { borderColor: ct.border, minimumWidth: PRICE_SCALE_MIN_W },
   });
   fundChartObj = chart;
 
@@ -1036,8 +1039,8 @@ function createFundChart(container, data) {
 }
 
 // ── Time scale sync ──
-// All three charts share the same timestamps array, so logical range = 1:1.
-// Simple: any chart's visible range change → set same range on the other two.
+// Use visible TIME range (not logical range) so null-skipping in each series
+// doesn't cause misalignment — dates are absolute, index positions are not.
 let isSyncing = false;
 let syncRAF = 0;
 
@@ -1050,11 +1053,11 @@ function lockSync() {
 function syncTimeScales() {
   const allCharts = [priceChartObj, compChartObj, fundChartObj].filter(Boolean);
   allCharts.forEach((src, si) => {
-    src.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    src.timeScale().subscribeVisibleTimeRangeChange(range => {
       if (isSyncing || !range) return;
       lockSync();
       allCharts.forEach((tgt, ti) => {
-        if (ti !== si) tgt.timeScale().setVisibleLogicalRange(range);
+        if (ti !== si) tgt.timeScale().setVisibleRange(range);
       });
     });
   });
@@ -1169,10 +1172,10 @@ function toggleFullscreen() {
     syncTimeScales();
     requestAnimationFrame(() => {
       if (priceChartObj) {
-        const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
+        const initRange = priceChartObj.timeScale().getVisibleRange();
         if (initRange) {
           isSyncing = true;
-          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleRange(initRange); });
           requestAnimationFrame(() => { isSyncing = false; });
         }
       }
@@ -1278,10 +1281,10 @@ function exitFullscreen() {
     syncTimeScales();
     requestAnimationFrame(() => {
       if (priceChartObj) {
-        const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
+        const initRange = priceChartObj.timeScale().getVisibleRange();
         if (initRange) {
           isSyncing = true;
-          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+          [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleRange(initRange); });
           requestAnimationFrame(() => { isSyncing = false; });
         }
       }
@@ -1581,13 +1584,13 @@ async function render(tf) {
   createCompChart(document.getElementById('compChart'), data);
   createFundChart(document.getElementById('fundChart'), data);
   syncTimeScales();
-  // Force all charts to same initial visible range as price chart (after render)
+  // Force all charts to same initial visible time range as price chart
   requestAnimationFrame(() => {
     if (priceChartObj) {
-      const initRange = priceChartObj.timeScale().getVisibleLogicalRange();
+      const initRange = priceChartObj.timeScale().getVisibleRange();
       if (initRange) {
         isSyncing = true;
-        [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleLogicalRange(initRange); });
+        [compChartObj, fundChartObj].forEach(c => { if (c) c.timeScale().setVisibleRange(initRange); });
         requestAnimationFrame(() => { isSyncing = false; });
       }
     }
