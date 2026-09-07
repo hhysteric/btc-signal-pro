@@ -37,10 +37,56 @@ const DataModule = {
             const text = await response.text();
             this.rawData = this.parseCSV(text);
             this.processedData = this.rawData.sort((a, b) => a.date - b.date);
+            // Overlay authoritative Binance OHLC (btc_daily.json) so the K-line chart
+            // matches the top price chart. The pipeline's merge_data() lets Binance win
+            // on overlapping dates, but that only lands in btc_daily.json — the raw
+            // historical CSV still carries the old vendor's values for recent days.
+            await this._overlayAuthoritativeOHLC();
             return this.processedData;
         } catch (e) {
             console.error('Failed to load CSV:', e);
             return [];
+        }
+    },
+
+    // Replace recent-day OHLC in processedData with the authoritative values from
+    // btc_daily.json (same source the top price chart uses). CSV early history is
+    // kept; overlapping dates are overwritten; JSON-only trailing days are appended.
+    async _overlayAuthoritativeOHLC() {
+        try {
+            const resp = await fetch('data/btc_daily.json' + this._cacheBust());
+            const json = await resp.json();
+            const d = (json && json.data) ? json.data : null;
+            if (!d || !d.timestamps || !d.close) return;
+
+            const byDay = new Map();
+            for (let i = 0; i < this.processedData.length; i++) {
+                const r = this.processedData[i];
+                byDay.set(r.date.toISOString().slice(0, 10), r);
+            }
+
+            for (let i = 0; i < d.timestamps.length; i++) {
+                if (d.close[i] == null) continue;
+                const dt = new Date(d.timestamps[i]);
+                const key = dt.toISOString().slice(0, 10);
+                const o = d.open && d.open[i] != null ? d.open[i] : d.close[i];
+                const h = d.high && d.high[i] != null ? d.high[i] : d.close[i];
+                const l = d.low && d.low[i] != null ? d.low[i] : d.close[i];
+                const c = d.close[i];
+                const vol = d.volume && d.volume[i] != null ? d.volume[i] : null;
+                const existing = byDay.get(key);
+                if (existing) {
+                    existing.open = o; existing.high = h; existing.low = l; existing.close = c;
+                    if (vol != null) existing.volume = vol;
+                } else {
+                    const row = { date: dt, open: o, high: h, low: l, close: c, volume: vol };
+                    byDay.set(key, row);
+                    this.processedData.push(row);
+                }
+            }
+            this.processedData.sort((a, b) => a.date - b.date);
+        } catch (e) {
+            console.warn('OHLC overlay skipped (btc_daily.json unavailable):', e);
         }
     },
 
